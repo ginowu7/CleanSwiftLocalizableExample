@@ -143,6 +143,7 @@
 				7D3B6DBF2127801E00B2AEF0 /* Sources */,
 				7D3B6DC02127801E00B2AEF0 /* Frameworks */,
 				7D3B6DC12127801E00B2AEF0 /* Resources */,
+				7D3B6E012127858600B2AEF0 /* Clean Localizable Files */,
 			);
 			buildRules = (
 			);
@@ -261,6 +262,23 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		7D3B6E012127858600B2AEF0 /* Clean Localizable Files */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			name = "Clean Localizable Files";
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "./scripts/clean_localizable.swift\\";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		7D3B6DBF2127801E00B2AEF0 /* Sources */ = {

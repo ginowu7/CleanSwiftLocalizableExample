@@ -15,7 +15,8 @@ class LocalizableListTableViewController: UITableViewController {
         NSLocalizedString("LocalizableListTableViewController:Fruit:Apple", comment: "Apple title"),
         NSLocalizedString("LocalizableListTableViewController:Fruit:Orange", comment: "Orange title"),
         NSLocalizedString("LocalizableListTableViewController:Fruit:Grape", comment: "Grape title"),
-        NSLocalizedString("LocalizableListTableViewController:Fruit:Strawberry", comment: "Strawberry title")
+        NSLocalizedString("LocalizableListTableViewController:Fruit:Strawberry", comment: "Strawberry title"),
+        NSLocalizedString("LocalizableListTableViewController:Fruit:BAD", comment: "Strawberry title")
     ]
 
     override func viewDidLoad() {
