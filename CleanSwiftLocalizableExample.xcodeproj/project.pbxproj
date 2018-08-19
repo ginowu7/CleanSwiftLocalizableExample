@@ -276,7 +276,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "./scripts/clean_localizable.swift\\";
+			shellScript = "start_time=`date +%s`\n./scripts/clean_localizable.swift\nend_time=`date +%s`\necho execution time was `expr $end_time - $start_time` s.";
 		};
 /* End PBXShellScriptBuildPhase section */
 

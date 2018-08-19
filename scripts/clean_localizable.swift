@@ -1,4 +1,4 @@
-#!/usr/bin/swift
+#!/usr/bin/xcrun --sdk macosx swift
 
 import Foundation
 
@@ -16,8 +16,7 @@ var pathFiles: [String] = {
 
 /// List of localizable files - not including Localizable files in the Pods
 var localizableFiles: [String] = {
-    let files = pathFiles.filter { $0.hasSuffix("Localizable.strings") && !$0.contains("Pods") }
-    return files
+    return pathFiles.filter { $0.hasSuffix("Localizable.strings") && !$0.contains("Pods") }
 }()
 
 
@@ -61,43 +60,62 @@ func create() -> [LocalizationStringsFile] {
     return localizableFiles.map(LocalizationStringsFile.init(path:))
 }
 
-/// Makes sure all localizable files contain the same keys
+///
+///
+/// - Returns: A list of LocalizationCodeFile - contains path of file and all keys in it
+func localizedStringsInCode() -> [LocalizationCodeFile] {
+    return executableFiles.compactMap {
+        let content = contents(atPath: $0)
+        let matches = regexFor("(?<=NSLocalizedString\\()\\s*\"(?!.*?%d)(.*?)\"", content: content)
+        return matches.isEmpty ? nil : LocalizationCodeFile(path: $0, keys: Set(matches))
+    }
+}
+
+/// Throws error is ALL localizable files does not have matching keys
 ///
 /// - Parameter files: list of localizable files to validate
-func validateKeys(_ files: [LocalizationStringsFile]) {
+func validateMatchKeys(_ files: [LocalizationStringsFile]) {
+    print("------------ Validating keys match in all localizable files ------------")
     guard let base = files.first, files.count > 1 else { return }
     let files = Array(files.dropFirst())
     files.forEach {
         guard let extraKey = Set(base.keys).symmetricDifference($0.keys).first else { return }
         let incorrectFile = $0.keys.contains(extraKey) ? $0 : base
-        fatalError("Found extra key: \(extraKey) in file: \(incorrectFile.path)")
+        printPretty("error: Found extra key: \(extraKey) in file: \(incorrectFile.path)")
     }
 }
 
-///
-///
-/// - Returns: A list of LocalizationCodeFile - contains path of file and all keys in it
-func localizedStringsInCode() -> [LocalizationCodeFile] {
-    let files = executableFiles
-    return files.map {
-        let content = contents(atPath: $0)
-        let matches = regexFor("(?<=NSLocalizedString\\()\\s*\"(.*?)\"", content: content)
-        return LocalizationCodeFile(path: $0, keys: Set(matches))
-    }
-}
-
-
-/// Checks for defined keys in code, not defined in localizable strings file
+/// Throws error if localizable files are missing keys
 ///
 /// - Parameters:
 ///   - codeFiles: Array of LocalizationCodeFile
 ///   - localizationFiles: Array of LocalizableStringFiles
-func validateKeys(_ codeFiles: [LocalizationCodeFile], localizationFiles: [LocalizationStringsFile]) {
-    guard let baseFile = localizationFiles.first else { return }
+func validateMissingKeys(_ codeFiles: [LocalizationCodeFile], localizationFiles: [LocalizationStringsFile]) {
+    print("------------ Checking for missing keys -----------")
+    guard let baseFile = localizationFiles.first else { fatalError("Could not locate base localization file") }
     let baseKeys = Set(baseFile.keys)
     codeFiles.forEach {
         let extraKeys = $0.keys.subtracting(baseKeys)
-        if !extraKeys.isEmpty { print("Found keys in code: \(extraKeys), not defined in strings file ") }
+        if !extraKeys.isEmpty {
+            printPretty("error: Found keys in code: \(extraKeys) from \($0.path), missing in strings file ")
+        }
+    }
+}
+
+
+/// Throws warning if keys exist in localizable file but are not being used
+///
+/// - Parameters:
+///   - codeFiles: Array of LocalizationCodeFile
+///   - localizationFiles: Array of LocalizableStringFiles
+func validateDeadKeys(_ codeFiles: [LocalizationCodeFile], localizationFiles: [LocalizationStringsFile]) {
+    print("------------ Checking for any dead keys in localizable file -----------")
+    guard let baseFile = localizationFiles.first else { fatalError("Could not locate base localization file") }
+    let baseKeys = Set(baseFile.keys)
+    let allCodeFileKeys = codeFiles.flatMap { $0.keys }
+    let deadKeys = baseKeys.subtracting(allCodeFileKeys)
+    if !deadKeys.isEmpty {
+        printPretty("warning: \(deadKeys) - Suggest cleaning dead keys")
     }
 }
 
@@ -114,12 +132,13 @@ struct LocalizationStringsFile: Pathable {
     }
 
     init(path: String) {
-        let kv = ContentParser.parse(path)
         self.path = path
-        self.kv = kv
+        self.kv = ContentParser.parse(path)
     }
 
+    /// Writes back to localizable file with sorted keys and removed whitespaces and new lines
     func cleanWrite() {
+        print("------------ Sort and remove whitespaces: \(path) ------------")
         let content = kv.keys.sorted().map { "\($0) = \(kv[$0]!);" }.joined(separator: "\n")
         try! content.write(toFile: path, atomically: true, encoding: .utf8)
     }
@@ -131,26 +150,42 @@ struct LocalizationCodeFile: Pathable {
     let keys: Set<String>
 }
 
-enum ContentParser {
+struct ContentParser {
+
+    /// Parses contents of a file to localizable keys and values - Throws error if localizable file have duplicated keys
+    ///
+    /// - Parameter path: Localizable file paths
+    /// - Returns: localizable key and value for content at path
     static func parse(_ path: String) -> [String: String] {
         let content = contents(atPath: path)
-
         let trimmed = content
             .replacingOccurrences(of: "\n+", with: "", options: .regularExpression, range: nil)
             .trimmingCharacters(in: .whitespacesAndNewlines)
         let keys = regexFor("\"([^\"]*?)\"(?= =)", content: trimmed)
         let values = regexFor("(?<== )\"(.*?)\"(?=;)", content: trimmed)
-        if keys.count != values.count { fatalError("Error parsing contents") }
+        if keys.count != values.count { fatalError("Error parsing contents: Make sure all keys and values are in correct format without comments in file") }
+        print("------------ Validating for duplicate keys: \(path) ------------")
         return zip(keys, values).reduce(into: [String: String]()) { results, keyValue in
-            if results[keyValue.0] != nil { fatalError("Found duplicate key: \(keyValue.0) in file: \(path)") }
+            if results[keyValue.0] != nil {
+                printPretty("error: Found duplicate key: \(keyValue.0) in file: \(path)")
+                abort()
+            }
             results[keyValue.0] = keyValue.1
         }
     }
 }
 
-let files = create()
-validateKeys(files)
-files.forEach { $0.cleanWrite() }
+func printPretty(_ string: String) {
+    print(string.replacingOccurrences(of: "\\", with: ""))
+}
+
+let stringFiles = create()
+stringFiles.forEach { print($0.path) }
+validateMatchKeys(stringFiles)
+stringFiles.forEach { $0.cleanWrite() }
 
 let codeFiles = localizedStringsInCode()
-validateKeys(codeFiles, localizationFiles: files)
+validateMissingKeys(codeFiles, localizationFiles: stringFiles)
+validateDeadKeys(codeFiles, localizationFiles: stringFiles)
+
+print("------------ SUCCESS ------------")
